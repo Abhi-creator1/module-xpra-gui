@@ -6,9 +6,10 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- This is what makes Edrys recognize the module -->
+  <!-- Edrys module metadata -->
   <meta name="description" content="ROS2 GUI streamed via XPRA" />
   <meta name="show-in" content="*" />
+
   <title>ROS2 GUI (XPRA Viewer)</title>
 
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
@@ -18,42 +19,49 @@
 
   <style>
     html, body {
+      height: 100%;
+      width: 100%;
       margin: 0;
       padding: 0;
+      overflow: hidden;
+      background: #111;
+    }
+
+    #container {
+      position: relative;
       height: 100%;
       width: 100%;
       display: flex;
-      flex-direction: column;
-      background: #111;
     }
 
     #viewer {
       flex: 1;
-      border: none;
       width: 100%;
-      background-color: black;
+      height: 100%;
+      border: none;
+      background: black;
     }
 
     #loading {
-      text-align: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
       padding: 6px;
       background: #222;
       color: #ddd;
+      text-align: center;
       font-size: 14px;
+      z-index: 10;
     }
   </style>
-
 </head>
 
 <body>
   <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
-    <div style="height:100%; display:flex; flex-direction: column;">
-
+    <div id="container">
       <div id="loading">Connecting to XPRA server…</div>
-
-      <!-- XPRA Web UI -->
       <iframe id="viewer" src="http://localhost:14500" allowfullscreen></iframe>
-
     </div>
   </template>
 
