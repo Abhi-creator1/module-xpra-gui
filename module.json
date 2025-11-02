@@ -1,0 +1,6 @@
+{
+  "name": "ROS2 GUI",
+  "description": "A simple module to display the ROS2 GUI via XPRA iframe",
+  "show-in": "*",
+  "entry": "index.html"
+}
