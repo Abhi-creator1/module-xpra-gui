@@ -1,0 +1,1 @@
+This module displays GUI applications from the ROS2 container using XPRA web client

@@ -1,20 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-  <title>ROS2 GUI</title>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- This is what makes Edrys recognize the module -->
+  <meta name="description" content="ROS2 GUI streamed via XPRA" />
+  <meta name="show-in" content="*" />
+  <title>ROS2 GUI (XPRA Viewer)</title>
+
+  <script src="https://edrys-labs.github.io/module/edrys.js"></script>
+  <script defer src="https://edrys-labs.github.io/module/vendor/alpine.min.js"></script>
+  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/water.min.css" />
+  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/open-iconic/css/open-iconic.min.css" />
+
   <style>
-    html, body, iframe {
+    html, body {
       margin: 0;
       padding: 0;
-      width: 100%;
       height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #111;
+    }
+
+    #viewer {
+      flex: 1;
       border: none;
-      overflow: hidden;
+      width: 100%;
+      background-color: black;
+    }
+
+    #loading {
+      text-align: center;
+      padding: 6px;
+      background: #222;
+      color: #ddd;
+      font-size: 14px;
     }
   </style>
+
 </head>
+
 <body>
-  <!-- Change the port if your XPRA runs on a different one -->
-  <iframe src="http://localhost:14500" allowfullscreen></iframe>
+  <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
+    <div style="height:100%; display:flex; flex-direction: column;">
+
+      <div id="loading">Connecting to XPRA server…</div>
+
+      <!-- XPRA Web UI -->
+      <iframe id="viewer" src="http://localhost:14500" allowfullscreen></iframe>
+
+    </div>
+  </template>
+
+  <script>
+    const frame = document.getElementById("viewer");
+    const loading = document.getElementById("loading");
+    frame.onload = () => loading.style.display = "none";
+  </script>
 </body>
+
 </html>

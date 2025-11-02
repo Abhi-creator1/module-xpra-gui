@@ -1,6 +1,8 @@
 {
-  "name": "ROS2 GUI",
-  "description": "A simple module to display the ROS2 GUI via XPRA iframe",
+  "name": "ROS2 GUI (XPRA Viewer)",
+  "description": "Displays GUI applications from the ROS2 container using XPRA web client.",
   "show-in": "*",
-  "entry": "index.html"
+  "entry": "index.html",
+  "version": "1.0.0",
+  "author": "Your Name"
 }
