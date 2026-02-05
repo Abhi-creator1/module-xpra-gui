@@ -9,6 +9,8 @@
   <!-- Edrys module metadata -->
   <meta name="description" content="ROS2 GUI streamed via XPRA" />
   <meta name="show-in" content="*" />
+  <meta name="edrys:layout" content="full-width" />
+
 
   <title>ROS2 GUI (XPRA Viewer)</title>
 
@@ -35,7 +37,9 @@
     }
 
     #viewer {
-      flex: 1;
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
       border: none;
       background: black;
     }
