@@ -62,7 +62,7 @@
 <body>
   <div id="container">
     <div id="loading">Connecting to XPRA server…</div>
-        <iframe id="viewer" src="about:blank" allowfullscreen allow="clipboard-read; clipboard-write; local-network-access"></iframe>
+    <iframe id="viewer" src="about:blank" allowfullscreen allow="clipboard-read; clipboard-write; local-network-access"></iframe>
   </div>
 
   <script>
@@ -85,10 +85,11 @@
     function setViewerTarget(hostPort) {
       const raw = (hostPort && hostPort.trim()) || DEFAULT_SERVER;
 
-      // Strip any accidental http:// or https:// prefix the user might type
+      // Strip any accidental http:// or https:// prefix, trailing slashes,
+      // and any path the user might have typed (e.g. "http://host:port/path")
       const cleaned = raw
-        .replace(/^https?:\/\//, "")   // strip http:// or https:// prefix
-        .replace(/\/.*$/, "")          // strip everything from the first "/" onward
+        .replace(/^https?:\/\//, "")
+        .replace(/\/.*$/, "")   // drop everything from the first slash onward
         .trim();
       const [host, port] = cleaned.split(":");
 
