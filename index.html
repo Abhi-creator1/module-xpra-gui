@@ -1,24 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <!-- Edrys module metadata -->
   <meta name="description" content="ROS2 GUI streamed via XPRA" />
   <meta name="show-in" content="*" />
   <meta name="edrys:layout" content="full-width" />
 
+  <meta
+    name="module-config"
+    content="{
+      'config': {
+        'server': {
+          'type': string,
+          'hint': 'XPRA server URL (default: http://localhost:14500)'
+        }
+      },
+    }"
+  />
 
   <title>ROS2 GUI (XPRA Viewer)</title>
-
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
   <script defer src="https://edrys-labs.github.io/module/vendor/alpine.min.js"></script>
   <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/water.min.css" />
   <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/open-iconic/css/open-iconic.min.css" />
-
   <style>
     html, body {
       height: 100%;
@@ -28,14 +35,12 @@
       overflow: hidden;
       background: #111;
     }
-
     #container {
       position: relative;
       height: 100%;
       width: 100%;
       display: flex;
     }
-
     #viewer {
       flex: 1 1 auto;
       width: 100%;
@@ -43,7 +48,6 @@
       border: none;
       background: black;
     }
-
     #loading {
       position: absolute;
       top: 0;
@@ -58,20 +62,49 @@
     }
   </style>
 </head>
-
 <body>
-  <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
-    <div id="container">
-      <div id="loading">Connecting to XPRA server…</div>
-      <iframe id="viewer" src="http://localhost:14500" allowfullscreen></iframe>
-    </div>
-  </template>
+  <div id="container">
+    <div id="loading">Connecting to XPRA server…</div>
+    <iframe id="viewer" src="about:blank" allowfullscreen></iframe>
+  </div>
 
   <script>
+    const DEFAULT_SERVER = "http://localhost:14500";
+
     const frame = document.getElementById("viewer");
     const loading = document.getElementById("loading");
-    frame.onload = () => loading.style.display = "none";
+
+    frame.onload = () => {
+      if (frame.src !== "about:blank") {
+        loading.style.display = "none";
+      }
+    };
+
+    function setViewerSrc(url) {
+      let target = url && url.trim() ? url.trim() : DEFAULT_SERVER;
+
+      // allow "host:port" shorthand as well as a full URL
+      if (!target.startsWith("http://") && !target.startsWith("https://")) {
+        target = "http://" + target;
+      }
+
+      if (frame.src !== target) {
+        loading.style.display = "block";
+        frame.src = target;
+      }
+    }
+
+    Edrys.onReady(() => {
+      console.log("XPRA module loaded!");
+      const server = Edrys.module?.config?.server;
+      setViewerSrc(server);
+    });
+
+    // keep it live-updatable if the teacher changes config mid-session
+    Edrys.onUpdate((e) => {
+      const server = e?.module?.config?.server;
+      setViewerSrc(server);
+    });
   </script>
 </body>
-
 </html>
