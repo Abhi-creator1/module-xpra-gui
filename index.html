@@ -53,7 +53,7 @@
   <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
     <div id="container">
       <div id="loading">Connecting to XPRA server…</div>
-      <iframe id="viewer" src="http://localhost:14500" allowfullscreen></iframe>
+      <iframe id="viewer" src="http://192.168.137.108:14500" allowfullscreen></iframe>
     </div>
   </template>
   <script>
