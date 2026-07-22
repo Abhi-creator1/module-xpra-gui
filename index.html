@@ -86,7 +86,10 @@
       const raw = (hostPort && hostPort.trim()) || DEFAULT_SERVER;
 
       // Strip any accidental http:// or https:// prefix the user might type
-      const cleaned = raw.replace(/^https?:\/\//, "");
+      const cleaned = raw
+        .replace(/^https?:\/\//, "")   // strip http:// or https:// prefix
+        .replace(/\/.*$/, "")          // strip everything from the first "/" onward
+        .trim();
       const [host, port] = cleaned.split(":");
 
       const params = new URLSearchParams({
