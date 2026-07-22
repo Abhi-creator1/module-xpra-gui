@@ -5,14 +5,24 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Edrys module metadata -->
-  <meta name="description" content="ROS2 GUI streamed via XPRA" />
+  <meta name="description" content="ROS2 GUI streamed via XPRA (self-hosted HTML5 client)" />
   <meta name="show-in" content="*" />
   <meta name="edrys:layout" content="full-width" />
+
+  <meta
+    name="module-config"
+    content="{
+      'config': {
+        'server': {
+          'type': string,
+          'hint': 'XPRA server host:port, e.g. 192.168.137.108:14500 (default: localhost:14500)'
+        }
+      },
+    }"
+  />
+
   <title>ROS2 GUI (XPRA Viewer)</title>
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
-  <script defer src="https://edrys-labs.github.io/module/vendor/alpine.min.js"></script>
-  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/water.min.css" />
-  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/open-iconic/css/open-iconic.min.css" />
   <style>
     html, body {
       height: 100%;
@@ -50,16 +60,67 @@
   </style>
 </head>
 <body>
-  <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
-    <div id="container">
-      <div id="loading">Connecting to XPRA server…</div>
-      <iframe id="viewer" src="http://192.168.137.108:14500" allowfullscreen></iframe>
-    </div>
-  </template>
+  <div id="container">
+    <div id="loading">Connecting to XPRA server…</div>
+    <iframe id="viewer" src="about:blank" allowfullscreen allow="clipboard-read; clipboard-write"></iframe>
+  </div>
+
   <script>
+    const DEFAULT_SERVER = "localhost:14500";
+
+    // Path to the self-hosted xpra-html5 client, relative to this file.
+    // If this index.html lives at the repo root and the client is in /client,
+    // this resolves correctly on GitHub Pages automatically.
+    const CLIENT_PATH = "client/index.html";
+
     const frame = document.getElementById("viewer");
     const loading = document.getElementById("loading");
-    frame.onload = () => loading.style.display = "none";
+
+    frame.onload = () => {
+      if (frame.src !== "about:blank") {
+        loading.style.display = "none";
+      }
+    };
+
+    function setViewerTarget(hostPort) {
+      const raw = (hostPort && hostPort.trim()) || DEFAULT_SERVER;
+
+      // Strip any accidental http:// or https:// prefix the user might type
+      const cleaned = raw.replace(/^https?:\/\//, "");
+      const [host, port] = cleaned.split(":");
+
+      const params = new URLSearchParams({
+        server: host || "localhost",
+        port: port || "14500",
+        ssl: "false",       // Jetson XPRA is plain ws://, not wss://
+        path: "/",           // IMPORTANT: without this, xpra-html5 defaults
+                              // the websocket path to *this page's* URL path,
+                              // which is wrong when self-hosted under /client/
+        floating_menu: "true",
+        reconnect: "true",
+        sharing: "true",     // allow multiple students to view simultaneously
+        steal: "false",      // don't kick out an already-connected viewer
+        keyboard: "true",
+        clipboard: "true",
+      });
+
+      const target = `${CLIENT_PATH}?${params.toString()}`;
+
+      if (!frame.src.endsWith(target)) {
+        loading.style.display = "block";
+        frame.src = target;
+      }
+    }
+
+    Edrys.onReady(() => {
+      console.log("XPRA module loaded. config:", Edrys.module?.config);
+      setViewerTarget(Edrys.module?.config?.server);
+    });
+
+    Edrys.onUpdate((e) => {
+      console.log("XPRA module config updated:", e?.module?.config);
+      setViewerTarget(e?.module?.config?.server);
+    });
   </script>
 </body>
 </html>
