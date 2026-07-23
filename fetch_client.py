@@ -59,6 +59,7 @@ js/Keycodes.js
 js/MediaSourceUtil.js
 js/Menu.js
 js/MenuCustom.js
+js/Menu-custom.js
 js/Notifications.js
 js/OffscreenDecodeWorker.js
 js/OffscreenDecodeWorkerHelper.js
@@ -68,6 +69,13 @@ js/Utilities.js
 js/VideoDecoder.js
 js/WebTransport.js
 js/Window.js
+js/lib/es6-shim.js
+js/lib/AudioContextMonkeyPatch.js
+js/lib/bencode.js
+js/lib/zlib.js
+js/lib/forge.js
+js/lib/broadway/Decoder.js
+js/lib/jszip.js
 js/lib/FileSaver.js
 js/lib/StreamSaver.js
 js/lib/aurora/aac.js
