@@ -53,6 +53,11 @@ function init_client() {
     $('#progress-bar').val(progress);
   }
 
+  // Error handler to catch hidden errors
+  function error_handler(message) {
+    console.error("[XPRA Error]", message);
+  }
+
   // Create the client
   var client = new XpraClient('screen');
 
@@ -70,6 +75,7 @@ function init_client() {
   client.steal = steal;
   client.reconnect = reconnect;
   client.on_connection_progress = connection_progress;
+  client.on_error = error_handler;
 
   // Audio support (disabled by default for simplicity)
   client.audio_enabled = sound;
@@ -115,12 +121,24 @@ Edrys.onReady(() => {
   $(document).ready(function() {
     console.log("[XPRA Init] DOM ready, initializing client");
 
+    // Catch any uncaught errors
+    window.addEventListener('error', function(e) {
+      console.error("[XPRA Window Error]", e.error || e.message);
+    });
+
     // Initialize the client
     try {
       client = init_client();
       if (client) {
         console.log("[XPRA Init] Client initialized, connecting...");
+        console.log("[XPRA Init] Connection details:", {
+          host: client.host,
+          port: client.port,
+          ssl: client.ssl,
+          path: client.path
+        });
         client.connect();
+        console.log("[XPRA Init] connect() called");
       } else {
         console.error("[XPRA Init] Failed to initialize client");
       }
