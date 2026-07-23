@@ -6,52 +6,13 @@ var clog = console.log.bind(console);
 var cdebug = console.debug.bind(console);
 var client = null;
 
-Edrys.onReady(() => {
-  console.log("[XPRA Init] Edrys ready");
-
-  const DEFAULT_SERVER = "localhost:14500";
-  const serverConfig = Edrys.module?.config?.server || DEFAULT_SERVER;
-  const cleaned = serverConfig.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
-  const [host, port] = cleaned.split(":");
-
-  // Populate global config that will be read by config-interceptor.js
-  window.EDRYS_XPRA_CONFIG = {
-    'server': host || 'localhost',
-    'port': port || '14500',
-    'ssl': 'false',
-    'path': '/'
-  };
-
-  console.log("[XPRA Init] Configured for:", host + ":" + port);
-  console.log("[XPRA Init] Config injected:", window.EDRYS_XPRA_CONFIG);
-  console.log("[XPRA Init] WebSocket will connect from origin:", window.location.origin);
-});
-
-// Initialize XPRA client when DOM is ready
-$(document).ready(function() {
-  console.log("[XPRA Init] DOM ready, initializing client");
-
-  // Create convenience wrappers for Utilities functions
-  window.getparam = function(prop) {
-    return Utilities.getparam(prop);
-  };
-  window.getboolparam = function(prop, defaultValue) {
-    return Utilities.getboolparam(prop, defaultValue);
-  };
-
-  // Initialize the client
-  try {
-    client = init_client();
-    if (client) {
-      console.log("[XPRA Init] Client initialized, connecting...");
-      client.connect();
-    } else {
-      console.error("[XPRA Init] Failed to initialize client");
-    }
-  } catch (e) {
-    console.error("[XPRA Init] Error initializing client:", e);
-  }
-});
+// Create convenience wrappers for Utilities functions (defined globally)
+window.getparam = function(prop) {
+  return Utilities.getparam(prop);
+};
+window.getboolparam = function(prop, defaultValue) {
+  return Utilities.getboolparam(prop, defaultValue);
+};
 
 // Simplified init_client function
 function init_client() {
@@ -123,3 +84,43 @@ function init_client() {
   console.log("[XPRA Init] Client created and configured");
   return client;
 }
+
+// Wait for BOTH Edrys AND DOM to be ready
+Edrys.onReady(() => {
+  console.log("[XPRA Init] Edrys ready");
+
+  const DEFAULT_SERVER = "localhost:14500";
+  const serverConfig = Edrys.module?.config?.server || DEFAULT_SERVER;
+  const cleaned = serverConfig.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+  const [host, port] = cleaned.split(":");
+
+  // Populate global config that will be read by config-interceptor.js
+  window.EDRYS_XPRA_CONFIG = {
+    'server': host || 'localhost',
+    'port': port || '14500',
+    'ssl': 'false',
+    'path': '/'
+  };
+
+  console.log("[XPRA Init] Configured for:", host + ":" + port);
+  console.log("[XPRA Init] Config injected:", window.EDRYS_XPRA_CONFIG);
+  console.log("[XPRA Init] WebSocket will connect from origin:", window.location.origin);
+
+  // Now wait for DOM ready, then initialize client
+  $(document).ready(function() {
+    console.log("[XPRA Init] DOM ready, initializing client");
+
+    // Initialize the client
+    try {
+      client = init_client();
+      if (client) {
+        console.log("[XPRA Init] Client initialized, connecting...");
+        client.connect();
+      } else {
+        console.error("[XPRA Init] Failed to initialize client");
+      }
+    } catch (e) {
+      console.error("[XPRA Init] Error initializing client:", e);
+    }
+  });
+});
