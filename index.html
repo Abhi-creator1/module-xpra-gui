@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <!-- Edrys module metadata -->
-  <meta name="description" content="ROS2 GUI streamed via XPRA (self-hosted HTML5 client)" />
+  <meta name="description" content="ROS2 GUI streamed via XPRA HTML5 client" />
   <meta name="show-in" content="*" />
-  <meta name="edrys:layout" content="full-width" />
 
   <meta
     name="module-config"
@@ -22,7 +22,52 @@
   />
 
   <title>ROS2 GUI (XPRA Viewer)</title>
+
+  <!-- Edrys -->
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
+
+  <!-- XPRA Client CSS -->
+  <link rel="stylesheet" href="https://abhi-creator1.github.io/module-xpra-gui/client/css/client.css">
+  <link rel="stylesheet" href="https://abhi-creator1.github.io/module-xpra-gui/client/css/spinner.css">
+  <link rel="stylesheet" href="https://abhi-creator1.github.io/module-xpra-gui/client/css/menu.css"/>
+  <link rel="stylesheet" href="https://abhi-creator1.github.io/module-xpra-gui/client/css/menu-skin.css"/>
+  <link rel="stylesheet" href="https://abhi-creator1.github.io/module-xpra-gui/client/css/icon.css"/>
+
+  <!-- XPRA Client JavaScript Libraries -->
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/es6-shim.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/AudioContextMonkeyPatch.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/jquery.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/jquery-ui.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/jquery.ba-throttle-debounce.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/bencode.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/zlib.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/lz4.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/brotli_decode.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/forge.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/jsmpeg.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/broadway/Decoder.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/aurora/aurora.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/aurora/aurora-xpra.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/FileSaver.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/lib/jszip.js"></script>
+
+  <!-- Config interceptor MUST load before Utilities.js and Client.js -->
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/config-interceptor.js"></script>
+
+  <!-- XPRA Client Core -->
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Keycodes.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Protocol.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Window.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Notifications.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Utilities.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/MediaSourceUtil.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Client.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Menu.js"></script>
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/client/js/Menu-custom.js"></script>
+
+  <!-- Edrys initialization AFTER all XPRA scripts -->
+  <script src="https://abhi-creator1.github.io/module-xpra-gui/init-xpra.js"></script>
+
   <style>
     html, body {
       height: 100%;
@@ -32,117 +77,18 @@
       overflow: hidden;
       background: #111;
     }
-    #container {
-      position: relative;
-      height: 100%;
-      width: 100%;
-      display: flex;
-    }
-    #viewer {
-      flex: 1 1 auto;
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: black;
-    }
-    #loading {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      padding: 6px;
-      background: #222;
-      color: #ddd;
-      text-align: center;
-      font-size: 14px;
-      z-index: 10;
-    }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div id="loading">Connecting to XPRA server…</div>
-    <iframe id="viewer" src="about:blank" allowfullscreen allow="clipboard-read; clipboard-write; local-network-access"></iframe>
+  <!-- XPRA Client UI loaded directly (no iframe!) -->
+  <div id="dpi" style="width: 1in; height: 1in; left: -100%; top: -100%; position: absolute;"></div>
+
+  <div id="progress" class="overlay" style="display: none">
+    <p id="progress-label"></p>
+    <p id="progress-details"></p>
+    <progress id="progress-bar" max="100" value="10"></progress>
   </div>
 
-  <script>
-    const DEFAULT_SERVER = "localhost:14500";
-
-    // Path to the self-hosted xpra-html5 client, relative to this file.
-    // If this index.html lives at the repo root and the client is in /client,
-    // this resolves correctly on GitHub Pages automatically.
-    const CLIENT_PATH = "client/index.html";
-
-    const frame = document.getElementById("viewer");
-    const loading = document.getElementById("loading");
-
-    frame.onload = () => {
-      if (frame.src !== "about:blank") {
-        console.log("[XPRA Wrapper] Iframe loaded successfully:", frame.src);
-        loading.style.display = "none";
-      }
-    };
-
-    frame.onerror = (e) => {
-      console.error("[XPRA Wrapper] Iframe error:", e);
-      loading.textContent = "Error loading XPRA client";
-      loading.style.background = "#600";
-    };
-
-    // Monitor iframe navigation
-    window.addEventListener("message", (e) => {
-      console.log("[XPRA Wrapper] Message from iframe:", e.origin, e.data);
-    });
-
-    function setViewerTarget(hostPort) {
-      const raw = (hostPort && hostPort.trim()) || DEFAULT_SERVER;
-      console.log("[XPRA Wrapper] Raw config value:", raw);
-
-      // Strip any accidental http:// or https:// prefix, trailing slashes,
-      // and any path the user might have typed (e.g. "http://host:port/path")
-      const cleaned = raw
-        .replace(/^https?:\/\//, "")
-        .replace(/\/.*$/, "")   // drop everything from the first slash onward
-        .trim();
-      console.log("[XPRA Wrapper] Cleaned value:", cleaned);
-
-      const [host, port] = cleaned.split(":");
-      console.log("[XPRA Wrapper] Parsed host:", host, "port:", port);
-
-      const params = new URLSearchParams({
-        server: host || "localhost",
-        port: port || "14500",
-        ssl: "false",       // Jetson XPRA is plain ws://, not wss://
-        path: "/",           // IMPORTANT: without this, xpra-html5 defaults
-                              // the websocket path to *this page's* URL path,
-                              // which is wrong when self-hosted under /client/
-        floating_menu: "true",
-        reconnect: "true",
-        sharing: "true",     // allow multiple students to view simultaneously
-        steal: "false",      // don't kick out an already-connected viewer
-        keyboard: "true",
-        clipboard: "true",
-      });
-
-      const target = `${CLIENT_PATH}?${params.toString()}`;
-      console.log("[XPRA Wrapper] Final iframe URL:", target);
-      console.log("[XPRA Wrapper] Full URL would be:", new URL(target, window.location.href).href);
-
-      if (!frame.src.endsWith(target)) {
-        loading.style.display = "block";
-        frame.src = target;
-      }
-    }
-
-    Edrys.onReady(() => {
-      console.log("XPRA module loaded. config:", Edrys.module?.config);
-      setViewerTarget(Edrys.module?.config?.server);
-    });
-
-    Edrys.onUpdate((e) => {
-      console.log("XPRA module config updated:", e?.module?.config);
-      setViewerTarget(e?.module?.config?.server);
-    });
-  </script>
+  <div id="screen" style="width: 100%; height:100%;"></div>
 </body>
 </html>
