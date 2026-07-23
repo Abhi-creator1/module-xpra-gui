@@ -78,12 +78,25 @@
 
     frame.onload = () => {
       if (frame.src !== "about:blank") {
+        console.log("[XPRA Wrapper] Iframe loaded successfully:", frame.src);
         loading.style.display = "none";
       }
     };
 
+    frame.onerror = (e) => {
+      console.error("[XPRA Wrapper] Iframe error:", e);
+      loading.textContent = "Error loading XPRA client";
+      loading.style.background = "#600";
+    };
+
+    // Monitor iframe navigation
+    window.addEventListener("message", (e) => {
+      console.log("[XPRA Wrapper] Message from iframe:", e.origin, e.data);
+    });
+
     function setViewerTarget(hostPort) {
       const raw = (hostPort && hostPort.trim()) || DEFAULT_SERVER;
+      console.log("[XPRA Wrapper] Raw config value:", raw);
 
       // Strip any accidental http:// or https:// prefix, trailing slashes,
       // and any path the user might have typed (e.g. "http://host:port/path")
@@ -91,7 +104,10 @@
         .replace(/^https?:\/\//, "")
         .replace(/\/.*$/, "")   // drop everything from the first slash onward
         .trim();
+      console.log("[XPRA Wrapper] Cleaned value:", cleaned);
+
       const [host, port] = cleaned.split(":");
+      console.log("[XPRA Wrapper] Parsed host:", host, "port:", port);
 
       const params = new URLSearchParams({
         server: host || "localhost",
@@ -109,6 +125,8 @@
       });
 
       const target = `${CLIENT_PATH}?${params.toString()}`;
+      console.log("[XPRA Wrapper] Final iframe URL:", target);
+      console.log("[XPRA Wrapper] Full URL would be:", new URL(target, window.location.href).href);
 
       if (!frame.src.endsWith(target)) {
         loading.style.display = "block";
