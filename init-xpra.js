@@ -91,7 +91,8 @@ Edrys.onReady(() => {
 
   const DEFAULT_SERVER = "localhost:14500";
   const serverConfig = Edrys.module?.config?.server || DEFAULT_SERVER;
-  const cleaned = serverConfig.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+  // Strip protocol (http://, https://, ws://, wss://) and any trailing path
+  const cleaned = serverConfig.replace(/^(https?|wss?):\/\//, "").replace(/\/.*$/, "").trim();
   const [host, port] = cleaned.split(":");
 
   // Populate global config that will be read by config-interceptor.js
