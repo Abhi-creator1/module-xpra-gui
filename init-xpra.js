@@ -55,6 +55,14 @@ function init_client() {
 
   // Create the client
   var client = new XpraClient('screen');
+
+  // Set connection parameters BEFORE init()
+  client.host = server;
+  client.port = port;
+  client.ssl = ssl;
+  client.path = path;
+
+  // Set client options
   client.sharing = sharing;
   client.clipboard_enabled = clipboard;
   client.printing = printing;
@@ -66,12 +74,8 @@ function init_client() {
   // Audio support (disabled by default for simplicity)
   client.audio_enabled = sound;
 
-  // Initialize client
+  // Initialize client (now it knows where to connect)
   client.init();
-  client.host = server;
-  client.port = port;
-  client.ssl = ssl;
-  client.path = path;
 
   // Redirect logging to client after initialization
   clog = function() {
