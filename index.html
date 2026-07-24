@@ -11,6 +11,18 @@
   <meta name="show-in" content="*" />
   <meta name="edrys:layout" content="full-width" />
 
+  <meta
+    name="module-config"
+    content="{
+      'stationConfig': {
+        'server': {
+          'type': string,
+          'hint': 'XPRA server URL (default: http://localhost:14500)'
+        }
+      }
+    }"
+  />
+
 
   <title>ROS2 GUI (XPRA Viewer)</title>
 
@@ -60,16 +72,22 @@
 </head>
 
 <body>
-  <template x-if="!!edrys" x-data="{ edrys: undefined }" x-init="Edrys.onUpdate((e)=>{ edrys={...e} })">
-    <div id="container">
-      <div id="loading">Connecting to XPRA server…</div>
-      <iframe id="viewer" src="http://localhost:14500" allowfullscreen></iframe>
-    </div>
-  </template>
+  <div id="container">
+    <div id="loading">Connecting to XPRA server…</div>
+    <iframe id="viewer" allowfullscreen></iframe>
+  </div>
 
   <script>
+    const DEFAULT_SERVER = "http://localhost:14500";
     const frame = document.getElementById("viewer");
     const loading = document.getElementById("loading");
+
+    Edrys.onReady(() => {
+      const serverUrl = Edrys.module?.stationConfig?.server || DEFAULT_SERVER;
+      console.log("[XPRA Module] Connecting to:", serverUrl);
+      frame.src = serverUrl;
+    });
+
     frame.onload = () => loading.style.display = "none";
   </script>
 </body>
