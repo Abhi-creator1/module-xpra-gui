@@ -143,20 +143,6 @@ Edrys.onReady(() => {
           path: client.path
         });
 
-        // Hook into protocol to see what happens
-        var originalOpen = client.protocol.open;
-        client.protocol.open = function(uri) {
-          console.log("[XPRA Protocol] open() called with URI:", uri);
-          try {
-            var result = originalOpen.call(this, uri);
-            console.log("[XPRA Protocol] open() returned:", result);
-            return result;
-          } catch (e) {
-            console.error("[XPRA Protocol] open() threw error:", e);
-            throw e;
-          }
-        };
-
         client.connect();
         console.log("[XPRA Init] connect() called");
       } else {
