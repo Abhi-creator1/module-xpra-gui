@@ -361,35 +361,52 @@ XpraClient.prototype.connect = function() {
 		}
 	}
 	// detect websocket in webworker support and degrade gracefully
-	if(window.Worker) {
+	if(window.Worker && !window.XPRA_CLIENT_FORCE_NO_WORKER) {
 		this.clog("we have webworker support");
 		// spawn worker that checks for a websocket
 		var me = this;
-		var worker = new Worker('js/lib/wsworker_check.js');
-		worker.addEventListener('message', function(e) {
-			var data = e.data;
-			switch (data['result']) {
-			case true:
-				// yey, we can use websocket in worker!
-				me.clog("we can use websocket in webworker");
-				me._do_connect(true);
-				break;
-			case false:
-				me.clog("we can't use websocket in webworker, won't use webworkers");
+		try {
+			var worker = new Worker('js/lib/wsworker_check.js');
+			worker.addEventListener('message', function(e) {
+				var data = e.data;
+				switch (data['result']) {
+				case true:
+					// yey, we can use websocket in worker!
+					me.clog("we can use websocket in webworker");
+					me._do_connect(true);
+					break;
+				case false:
+					me.clog("we can't use websocket in webworker, won't use webworkers");
+					me._do_connect(false);
+					break;
+				default:
+					me.clog("client got unknown message from worker");
+					me._do_connect(false);
+				};
+			}, false);
+			// Add error handler for worker load failures
+			worker.addEventListener('error', function(e) {
+				me.clog("worker failed to load, disabling webworker support:", e.message);
 				me._do_connect(false);
-				break;
-			default:
-				me.clog("client got unknown message from worker");
-				me._do_connect(false);
-			};
-		}, false);
-		// ask the worker to check for websocket support, when we receive a reply
-		// through the eventlistener above, _do_connect() will finish the job
-		worker.postMessage({'cmd': 'check'});
+			}, false);
+			// Add timeout in case worker hangs
+			setTimeout(function() {
+				if (!me.protocol) {
+					me.clog("worker check timeout, falling back to non-worker mode");
+					me._do_connect(false);
+				}
+			}, 2000);
+			// ask the worker to check for websocket support, when we receive a reply
+			// through the eventlistener above, _do_connect() will finish the job
+			worker.postMessage({'cmd': 'check'});
+		} catch(e) {
+			this.clog("worker creation failed:", e);
+			this._do_connect(false);
+		}
 	} else {
-		// no webworker support
-		this.clog("no webworker support at all.")
-		me._do_connect(false);
+		// no webworker support or forced to disable
+		this.clog("no webworker support or disabled via XPRA_CLIENT_FORCE_NO_WORKER");
+		this._do_connect(false);
 	}
 }
 

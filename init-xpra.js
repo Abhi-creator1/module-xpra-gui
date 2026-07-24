@@ -1,6 +1,11 @@
 // XPRA initialization for Edrys integration
 console.log("[XPRA Init] Starting initialization");
 
+// CRITICAL: Disable WebWorker to avoid path resolution issues in Edrys environment
+// The worker file path is relative and doesn't work when loaded from GitHub Pages
+window.XPRA_CLIENT_FORCE_NO_WORKER = true;
+console.log("[XPRA Init] WebWorker disabled, using direct WebSocket mode");
+
 // Global variables for logging (overridden after client init)
 var clog = console.log.bind(console);
 var cdebug = console.debug.bind(console);
@@ -123,7 +128,7 @@ Edrys.onReady(() => {
 
     // Catch any uncaught errors
     window.addEventListener('error', function(e) {
-      console.error("[XPRA Window Error]", e.error || e.message);
+      console.error("[XPRA Window Error]", e.error || e.message, e);
     });
 
     // Initialize the client
@@ -137,6 +142,21 @@ Edrys.onReady(() => {
           ssl: client.ssl,
           path: client.path
         });
+
+        // Hook into protocol to see what happens
+        var originalOpen = client.protocol.open;
+        client.protocol.open = function(uri) {
+          console.log("[XPRA Protocol] open() called with URI:", uri);
+          try {
+            var result = originalOpen.call(this, uri);
+            console.log("[XPRA Protocol] open() returned:", result);
+            return result;
+          } catch (e) {
+            console.error("[XPRA Protocol] open() threw error:", e);
+            throw e;
+          }
+        };
+
         client.connect();
         console.log("[XPRA Init] connect() called");
       } else {
