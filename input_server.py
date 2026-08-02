@@ -29,6 +29,16 @@ import logging
 app = Flask(__name__)
 CORS(app)
 
+
+@app.after_request
+def add_private_network_access_headers(response):
+    """Handle Chrome Private Network Access (PNA) preflight requirements.
+    HTTPS pages fetching http://localhost need this header in the response."""
+    if request.method == 'OPTIONS':
+        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    return response
+
 # ---- Configuration from environment ----
 DISPLAY = os.environ.get('DISPLAY', ':100')
 WIDTH = int(os.environ.get('XVFB_WIDTH', '1280'))
