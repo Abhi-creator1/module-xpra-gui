@@ -6,89 +6,554 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Edrys module metadata -->
-  <meta name="description" content="ROS2 GUI streamed via XPRA" />
+  <meta
+    name="description"
+    content="Streams ROS2 GUI applications (rviz2, rqt_graph, Gazebo) from a station to remote students via WebRTC video with full mouse and keyboard interactivity. For setup instructions see <br><a href='https://github.com/Abhi-creator1/module-xpra-gui' target='_blank'>github.com/Abhi-creator1/module-xpra-gui</a>"
+  />
   <meta name="show-in" content="*" />
-  <meta name="edrys:layout" content="full-width" />
 
   <meta
     name="module-config"
     content="{
       'stationConfig': {
-        'server': {
+        'inputServer': {
           'type': string,
-          'hint': 'XPRA server URL (default: http://localhost:14500)'
+          'hint': 'Input injection server URL (default: http://localhost:5001)'
+        },
+        'resolution': {
+          'type': string,
+          'hint': 'Xvfb resolution WxH (default: 1280x800)'
+        },
+        'streamName': {
+          'type': string,
+          'hint': 'Stream identifier (default: ros2-gui)'
         }
       }
     }"
   />
 
-
-  <title>ROS2 GUI (XPRA Viewer)</title>
+  <title>ROS2 GUI Viewer</title>
 
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
-  <script defer src="https://edrys-labs.github.io/module/vendor/alpine.min.js"></script>
-  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/water.min.css" />
-  <link rel="stylesheet" href="https://edrys-labs.github.io/module/vendor/open-iconic/css/open-iconic.min.css" />
 
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     html, body {
       height: 100%;
       width: 100%;
-      margin: 0;
-      padding: 0;
       overflow: hidden;
-      background: #111;
+      background: #1a1b26;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      color: #c0caf5;
     }
 
-    #container {
-      position: relative;
-      height: 100%;
-      width: 100%;
+    #app {
       display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
     }
 
-    #viewer {
-      flex: 1 1 auto;
+    /* ---- Status bar ---- */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #24283b;
+      border-bottom: 1px solid #414868;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .status-bar .title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .badge.streaming { background: #1f7a45; }
+    .badge.waiting   { background: #6b6b6b; }
+    .badge.error     { background: #b8384a; }
+
+    .spacer { flex: 1; }
+
+    /* ---- Buttons ---- */
+    button {
+      padding: 6px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-share {
+      background: #7aa2f7;
+      color: #1a1b26;
+    }
+    .btn-share:hover { background: #89b4fa; }
+
+    .btn-stop {
+      background: #f7768e;
+      color: #1a1b26;
+    }
+    .btn-stop:hover { background: #ff7a93; }
+
+    /* ---- Video area ---- */
+    .video-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .video-container video {
       width: 100%;
       height: 100%;
-      border: none;
-      background: black;
+      object-fit: contain;
+      display: block;
     }
 
-    #loading {
+    /* Transparent overlay to capture all input events */
+    .input-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      padding: 6px;
-      background: #222;
-      color: #ddd;
-      text-align: center;
-      font-size: 14px;
-      z-index: 10;
+      top: 0; left: 0; right: 0; bottom: 0;
+      cursor: crosshair;
+      z-index: 5;
     }
+    .input-overlay:focus {
+      outline: 2px solid #7aa2f7;
+      outline-offset: -2px;
+    }
+
+    /* ---- Waiting / info screens ---- */
+    .center-message {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .center-message .icon {
+      font-size: 48px;
+      opacity: 0.5;
+    }
+
+    .center-message p {
+      font-size: 14px;
+      opacity: 0.7;
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    .hint {
+      font-size: 11px;
+      opacity: 0.5;
+      padding: 4px 12px;
+      text-align: center;
+    }
+
+    /* ---- Station preview ---- */
+    .station-preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .station-preview .preview-label {
+      padding: 4px 12px;
+      font-size: 11px;
+      opacity: 0.5;
+    }
+
+    .station-preview video {
+      flex: 1;
+      width: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    .pulsing { animation: pulse 2s ease-in-out infinite; }
   </style>
 </head>
 
 <body>
-  <div id="container">
-    <div id="loading">Connecting to XPRA server…</div>
-    <iframe id="viewer" allowfullscreen></iframe>
-  </div>
+  <div id="app"></div>
 
   <script>
-    const DEFAULT_SERVER = "http://localhost:14500";
-    const frame = document.getElementById("viewer");
-    const loading = document.getElementById("loading");
+    // ========================================================
+    //  Configuration defaults
+    // ========================================================
+    const DEFAULT_INPUT_SERVER = 'http://localhost:5001';
+    const DEFAULT_RESOLUTION = '1280x800';
+    const DEFAULT_STREAM_NAME = 'ros2-gui';
+    const MOUSEMOVE_THROTTLE_MS = 33; // ~30fps
 
+    // ========================================================
+    //  State
+    // ========================================================
+    let streamHandle = null;
+    let receiveHandle = null;
+    let mediaStream = null;
+    let isStreaming = false;
+    let isConnected = false;
+
+    // Config (populated on Edrys.onReady)
+    let inputServerUrl = DEFAULT_INPUT_SERVER;
+    let xvfbWidth = 1280;
+    let xvfbHeight = 800;
+    let streamName = DEFAULT_STREAM_NAME;
+
+    // ========================================================
+    //  DOM references (created dynamically based on role)
+    // ========================================================
+    const app = document.getElementById('app');
+
+    // ========================================================
+    //  Utility: coordinate normalization
+    // ========================================================
+    function getVideoRect(videoEl) {
+      const cw = videoEl.clientWidth;
+      const ch = videoEl.clientHeight;
+      const vw = videoEl.videoWidth || cw;
+      const vh = videoEl.videoHeight || ch;
+      if (vw === 0 || vh === 0) return { offsetX: 0, offsetY: 0, rw: cw, rh: ch };
+      const scale = Math.min(cw / vw, ch / vh);
+      const rw = vw * scale;
+      const rh = vh * scale;
+      return {
+        offsetX: (cw - rw) / 2,
+        offsetY: (ch - rh) / 2,
+        rw: rw,
+        rh: rh
+      };
+    }
+
+    function normalizeCoords(e, videoEl) {
+      const rect = videoEl.getBoundingClientRect();
+      const vr = getVideoRect(videoEl);
+      const rawX = e.clientX - rect.left;
+      const rawY = e.clientY - rect.top;
+      const nx = (rawX - vr.offsetX) / vr.rw;
+      const ny = (rawY - vr.offsetY) / vr.rh;
+      return { nx: Math.max(0, Math.min(1, nx)), ny: Math.max(0, Math.min(1, ny)), valid: nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1 };
+    }
+
+    // ========================================================
+    //  Station Mode
+    // ========================================================
+    function initStation() {
+      app.innerHTML = `
+        <div class="status-bar">
+          <span class="title">ROS2 GUI Viewer</span>
+          <span class="badge waiting" id="station-badge">Station Mode</span>
+          <span class="spacer"></span>
+          <button class="btn-share" id="btn-share" onclick="startSharing()">Share Screen</button>
+          <button class="btn-stop" id="btn-stop" onclick="stopSharing()" style="display:none">Stop Sharing</button>
+        </div>
+        <div id="station-waiting" class="center-message">
+          <div class="icon">&#128250;</div>
+          <p>Click <strong>Share Screen</strong> to capture your ROS2 GUI window (e.g., xpra tab showing rviz2) and stream it to students.</p>
+          <p style="font-size:12px; opacity:0.5">Tip: Open xpra at <code>localhost:14500/?floating_menu=no</code> to hide the toolbar for better coordinate accuracy.</p>
+        </div>
+        <div id="station-streaming" class="station-preview" style="display:none">
+          <span class="preview-label">Local preview (students see this):</span>
+          <video id="preview-video" autoplay muted playsinline></video>
+        </div>
+      `;
+
+      // Listen for student input events and relay to Docker
+      Edrys.onMessage(({ from, subject, body }) => {
+        if (from === Edrys.username) return;
+
+        if (subject === 'gui-input' && body) {
+          relayInput(body);
+        }
+      });
+    }
+
+    async function startSharing() {
+      try {
+        mediaStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            frameRate: { ideal: 30 },
+          },
+          audio: false
+        });
+      } catch (err) {
+        console.warn('[GUI Module] Screen share cancelled or failed:', err.message);
+        return;
+      }
+
+      // Show preview
+      const previewVideo = document.getElementById('preview-video');
+      previewVideo.srcObject = mediaStream;
+
+      document.getElementById('station-waiting').style.display = 'none';
+      document.getElementById('station-streaming').style.display = 'flex';
+      document.getElementById('btn-share').style.display = 'none';
+      document.getElementById('btn-stop').style.display = 'inline-block';
+
+      const badge = document.getElementById('station-badge');
+      badge.textContent = 'Streaming';
+      badge.className = 'badge streaming';
+
+      // Start WebRTC stream to students
+      try {
+        streamHandle = await Edrys.sendStream(mediaStream, {
+          method: 'webrtc',
+          streamName: streamName
+        });
+        isStreaming = true;
+        console.log('[GUI Module] Stream started:', streamName);
+      } catch (err) {
+        console.error('[GUI Module] Failed to start stream:', err);
+        badge.textContent = 'Stream Error';
+        badge.className = 'badge error';
+      }
+
+      // Handle user revoking screen share
+      mediaStream.getVideoTracks()[0].onended = () => {
+        console.log('[GUI Module] Screen share ended by user');
+        stopSharing();
+      };
+    }
+
+    function stopSharing() {
+      if (streamHandle) {
+        streamHandle.stop();
+        streamHandle = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      isStreaming = false;
+
+      document.getElementById('station-waiting').style.display = 'flex';
+      document.getElementById('station-streaming').style.display = 'none';
+      document.getElementById('btn-share').style.display = 'inline-block';
+      document.getElementById('btn-stop').style.display = 'none';
+
+      const badge = document.getElementById('station-badge');
+      badge.textContent = 'Station Mode';
+      badge.className = 'badge waiting';
+    }
+
+    function relayInput(event) {
+      fetch(inputServerUrl + '/input', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event)
+      }).catch(err => {
+        // Silently ignore — input server may not be running yet
+      });
+    }
+
+    // ========================================================
+    //  Student / Teacher Mode
+    // ========================================================
+    function initViewer() {
+      app.innerHTML = `
+        <div class="status-bar">
+          <span class="title">ROS2 GUI Viewer</span>
+          <span class="badge waiting" id="viewer-badge">Connecting...</span>
+          <span class="spacer"></span>
+        </div>
+        <div id="viewer-waiting" class="center-message">
+          <div class="icon pulsing">&#128225;</div>
+          <p>Waiting for the station to share the ROS2 GUI...</p>
+          <p style="font-size:12px; opacity:0.5">The station operator needs to click "Share Screen" on their end.</p>
+        </div>
+        <div id="viewer-active" class="video-container" style="display:none">
+          <video id="remote-video" autoplay playsinline></video>
+          <div id="input-overlay" class="input-overlay" tabindex="0"></div>
+        </div>
+        <div id="viewer-hint" class="hint" style="display:none">Click on the video to focus, then use mouse and keyboard to interact with the remote GUI.</div>
+      `;
+
+      // Request stream from station
+      Edrys.onStream((stream, settings, metadata) => {
+        console.log('[GUI Module] Stream received:', metadata);
+
+        const video = document.getElementById('remote-video');
+        video.srcObject = stream;
+        isConnected = true;
+
+        document.getElementById('viewer-waiting').style.display = 'none';
+        document.getElementById('viewer-active').style.display = 'block';
+        document.getElementById('viewer-hint').style.display = 'block';
+
+        const badge = document.getElementById('viewer-badge');
+        badge.textContent = 'Connected';
+        badge.className = 'badge streaming';
+
+        // Set up input event handlers once video is playing
+        video.onloadedmetadata = () => {
+          setupInputHandlers(video);
+        };
+
+        // Handle stream ending
+        stream.getVideoTracks()[0].onended = () => {
+          isConnected = false;
+          badge.textContent = 'Disconnected';
+          badge.className = 'badge error';
+          document.getElementById('viewer-waiting').style.display = 'flex';
+          document.getElementById('viewer-active').style.display = 'none';
+          document.getElementById('viewer-hint').style.display = 'none';
+        };
+      }, {
+        method: 'webrtc',
+        streamName: streamName
+      });
+    }
+
+    // ========================================================
+    //  Input Event Handlers (student side)
+    // ========================================================
+    function setupInputHandlers(videoEl) {
+      const overlay = document.getElementById('input-overlay');
+      if (!overlay) return;
+
+      let lastMoveTime = 0;
+
+      // ---- Mouse Move (throttled) ----
+      overlay.addEventListener('mousemove', (e) => {
+        const now = Date.now();
+        if (now - lastMoveTime < MOUSEMOVE_THROTTLE_MS) return;
+        lastMoveTime = now;
+
+        const c = normalizeCoords(e, videoEl);
+        if (!c.valid) return;
+        Edrys.sendMessage('gui-input', { type: 'mousemove', nx: c.nx, ny: c.ny });
+      });
+
+      // ---- Mouse Down ----
+      overlay.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        overlay.focus();
+        const c = normalizeCoords(e, videoEl);
+        if (!c.valid) return;
+        Edrys.sendMessage('gui-input', {
+          type: 'mousedown', nx: c.nx, ny: c.ny,
+          button: e.button + 1  // JS 0,1,2 -> xdotool 1,2,3
+        });
+      });
+
+      // ---- Mouse Up ----
+      overlay.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        const c = normalizeCoords(e, videoEl);
+        if (!c.valid) return;
+        Edrys.sendMessage('gui-input', {
+          type: 'mouseup', nx: c.nx, ny: c.ny,
+          button: e.button + 1
+        });
+      });
+
+      // ---- Double Click ----
+      overlay.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        const c = normalizeCoords(e, videoEl);
+        if (!c.valid) return;
+        Edrys.sendMessage('gui-input', {
+          type: 'dblclick', nx: c.nx, ny: c.ny,
+          button: e.button + 1
+        });
+      });
+
+      // ---- Scroll / Wheel ----
+      overlay.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const c = normalizeCoords(e, videoEl);
+        if (!c.valid) return;
+        Edrys.sendMessage('gui-input', {
+          type: 'scroll', nx: c.nx, ny: c.ny,
+          deltaY: e.deltaY,
+          deltaX: e.deltaX
+        });
+      }, { passive: false });
+
+      // ---- Keyboard ----
+      overlay.addEventListener('keydown', (e) => {
+        // Allow Escape and F11 to pass through to the browser
+        if (e.key === 'Escape' || e.key === 'F11') return;
+        e.preventDefault();
+        Edrys.sendMessage('gui-input', {
+          type: 'keydown',
+          key: e.key,
+          code: e.code,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          metaKey: e.metaKey
+        });
+      });
+
+      overlay.addEventListener('keyup', (e) => {
+        if (e.key === 'Escape' || e.key === 'F11') return;
+        e.preventDefault();
+        Edrys.sendMessage('gui-input', {
+          type: 'keyup',
+          key: e.key,
+          code: e.code,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          metaKey: e.metaKey
+        });
+      });
+
+      // ---- Context Menu (suppress for right-click support) ----
+      overlay.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+      });
+    }
+
+    // ========================================================
+    //  Initialization
+    // ========================================================
     Edrys.onReady(() => {
-      const serverUrl = Edrys.module?.stationConfig?.server || DEFAULT_SERVER;
-      console.log("[XPRA Module] Connecting to:", serverUrl);
-      frame.src = serverUrl;
-    });
+      console.log('[GUI Module] Ready. Role:', Edrys.role);
 
-    frame.onload = () => loading.style.display = "none";
+      // Read configuration
+      const cfg = Edrys.module || {};
+      const stationCfg = cfg.stationConfig || {};
+      inputServerUrl = stationCfg.inputServer || DEFAULT_INPUT_SERVER;
+      streamName = stationCfg.streamName || DEFAULT_STREAM_NAME;
+
+      // Parse resolution
+      const res = (stationCfg.resolution || DEFAULT_RESOLUTION).split('x');
+      if (res.length === 2) {
+        xvfbWidth = parseInt(res[0], 10) || 1280;
+        xvfbHeight = parseInt(res[1], 10) || 800;
+      }
+
+      if (Edrys.role === 'station') {
+        initStation();
+      } else {
+        initViewer();
+      }
+    });
   </script>
 </body>
 

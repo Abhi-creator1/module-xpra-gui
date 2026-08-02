@@ -1,8 +1,8 @@
 {
-  "name": "ROS2 GUI (XPRA Viewer)",
-  "description": "Displays GUI applications from the ROS2 container using XPRA web client.",
+  "name": "ROS2 GUI Viewer",
+  "description": "Streams ROS2 GUI applications (rviz2, rqt_graph, Gazebo) from a station to remote students via WebRTC video with full mouse and keyboard interactivity.",
   "show-in": "*",
   "entry": "index.html",
-  "version": "1.0.0",
-  "author": "Your Name"
+  "version": "2.0.0",
+  "author": "Abhishek"
 }
