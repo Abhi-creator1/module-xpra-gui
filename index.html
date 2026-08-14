@@ -485,21 +485,22 @@
         trackEvent('move');
       });
 
-      // ---- Mouse Down ----
-      overlay.addEventListener('mousedown', (e) => {
+      // ---- Pointer Down (handles left, middle, right reliably) ----
+      overlay.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         overlay.focus();
+        overlay.setPointerCapture(e.pointerId);
         const c = normalizeCoords(e, videoEl);
         if (!c.valid) return;
         Edrys.sendMessage('gui-input', {
           type: 'mousedown', nx: c.nx, ny: c.ny,
           button: e.button + 1  // JS 0,1,2 -> xdotool 1,2,3
         });
-        trackEvent('click');
+        trackEvent('btn' + e.button);
       });
 
-      // ---- Mouse Up ----
-      overlay.addEventListener('mouseup', (e) => {
+      // ---- Pointer Up ----
+      overlay.addEventListener('pointerup', (e) => {
         e.preventDefault();
         const c = normalizeCoords(e, videoEl);
         if (!c.valid) return;
@@ -518,6 +519,11 @@
           type: 'dblclick', nx: c.nx, ny: c.ny,
           button: e.button + 1
         });
+      });
+
+      // ---- Suppress auxclick (middle/right click browser defaults) ----
+      overlay.addEventListener('auxclick', (e) => {
+        e.preventDefault();
       });
 
       // ---- Scroll / Wheel ----
