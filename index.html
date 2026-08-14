@@ -215,6 +215,8 @@
     let mediaStream = null;
     let isStreaming = false;
     let isConnected = false;
+    let relayOk = 0;
+    let relayFail = 0;
 
     // Config (populated on Edrys.onReady)
     let inputServerUrl = DEFAULT_INPUT_SERVER;
@@ -284,8 +286,6 @@
 
       // Listen for student input events and relay to Docker
       let inputCount = 0;
-      let relayOk = 0;
-      let relayFail = 0;
       Edrys.onMessage(({ from, subject, body }) => {
         if (subject === 'gui-input' && body) {
           inputCount++;
