@@ -203,7 +203,7 @@
     // ========================================================
     //  Configuration defaults
     // ========================================================
-    const DEFAULT_INPUT_SERVER = 'http://localhost:5002';
+    const DEFAULT_INPUT_SERVER = 'http://localhost:5001';
     const DEFAULT_RESOLUTION = '1280x800';
     const DEFAULT_STREAM_NAME = 'ros2-gui';
     const MOUSEMOVE_THROTTLE_MS = 33; // ~30fps
@@ -285,10 +285,6 @@
           <video id="preview-video" autoplay muted playsinline></video>
         </div>
       `;
-
-      // Debug: test if Chrome blocks localhost differently per port
-      fetch('http://localhost:5000/health').then(r=>r.text()).then(t=>console.log('[DEBUG] port 5000 OK:', t)).catch(e=>console.error('[DEBUG] port 5000 FAIL:', e.message));
-      fetch('http://localhost:5002/health').then(r=>r.text()).then(t=>console.log('[DEBUG] port 5002 OK:', t)).catch(e=>console.error('[DEBUG] port 5002 FAIL:', e.message));
 
       // Connect to input server via Socket.IO (same transport as pyxtermjs)
       connectInputSocket();

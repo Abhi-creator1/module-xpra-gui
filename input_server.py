@@ -35,6 +35,20 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*')
 
+
+@app.after_request
+def add_private_network_access_headers(response):
+    """Add Private Network Access (PNA) header for Chrome.
+
+    Cross-origin iframes on HTTPS pages need the server to explicitly
+    allow private-network requests via this header.  Same-origin iframes
+    (like pyxtermjs) bypass the PNA check, but our module is cross-origin,
+    so Chrome sends a preflight with Access-Control-Request-Private-Network
+    and expects this header in the response.
+    """
+    response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    return response
+
 # ---- Configuration from environment ----
 DISPLAY = os.environ.get('DISPLAY', ':100')
 WIDTH = int(os.environ.get('XVFB_WIDTH', '1280'))
