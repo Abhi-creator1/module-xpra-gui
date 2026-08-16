@@ -286,6 +286,10 @@
         </div>
       `;
 
+      // Debug: test if Chrome blocks localhost differently per port
+      fetch('http://localhost:5000/health').then(r=>r.text()).then(t=>console.log('[DEBUG] port 5000 OK:', t)).catch(e=>console.error('[DEBUG] port 5000 FAIL:', e.message));
+      fetch('http://localhost:5002/health').then(r=>r.text()).then(t=>console.log('[DEBUG] port 5002 OK:', t)).catch(e=>console.error('[DEBUG] port 5002 FAIL:', e.message));
+
       // Connect to input server via Socket.IO (same transport as pyxtermjs)
       connectInputSocket();
 
