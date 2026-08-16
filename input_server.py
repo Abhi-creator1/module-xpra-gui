@@ -201,6 +201,40 @@ def health():
     })
 
 
+# ---- Relay bridge page ----
+# Served as a hidden iframe inside the edrys module. Since this page
+# loads from http://localhost:5001 (same-origin with the server), it
+# can freely use Socket.IO to relay events. The parent module (on a
+# different HTTPS origin) communicates via postMessage, which works
+# cross-origin by design.
+RELAY_HTML = '''<!DOCTYPE html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+<script>
+const socket = io.connect(window.location.origin);
+socket.on('connect', function() {
+  window.parent.postMessage({type:'relay-status', connected:true}, '*');
+});
+socket.on('disconnect', function() {
+  window.parent.postMessage({type:'relay-status', connected:false}, '*');
+});
+socket.on('connect_error', function() {
+  window.parent.postMessage({type:'relay-status', connected:false}, '*');
+});
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'gui-input' && socket.connected) {
+    socket.emit('gui-input', e.data.event);
+  }
+});
+</script>
+'''
+
+
+@app.route('/relay.html')
+def serve_relay():
+    from flask import Response
+    return Response(RELAY_HTML, mimetype='text/html')
+
+
 # ---- Serve module files ----
 MODULE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'module')
 

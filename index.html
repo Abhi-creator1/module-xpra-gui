@@ -35,7 +35,6 @@
   <title>ROS2 GUI Viewer</title>
 
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -218,7 +217,7 @@
     let isConnected = false;
     let relayOk = 0;
     let relayFail = 0;
-    let inputSocket = null;
+    let relayConnected = false;
 
     // Config (populated on Edrys.onReady)
     let inputServerUrl = DEFAULT_INPUT_SERVER;
@@ -284,12 +283,24 @@
           <span class="preview-label">Local preview (students see this):</span>
           <video id="preview-video" autoplay muted playsinline></video>
         </div>
+        <iframe id="relay-frame" src="${inputServerUrl}/relay.html"
+                style="display:none" allow=""></iframe>
       `;
 
-      // Connect to input server via Socket.IO (same transport as pyxtermjs)
-      connectInputSocket();
+      // Listen for relay iframe status via postMessage
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'relay-status') {
+          relayConnected = !!e.data.connected;
+          const status = document.getElementById('station-relay-status');
+          if (status) {
+            status.textContent = relayConnected ? 'Relay OK' : 'Relay down';
+            status.style.color = relayConnected ? '#0f0' : '#f00';
+          }
+          console.log('[GUI Module] Relay iframe:', relayConnected ? 'connected' : 'disconnected');
+        }
+      });
 
-      // Listen for student input events and relay to Docker
+      // Listen for student input events and relay to Docker via iframe bridge
       let inputCount = 0;
       Edrys.onMessage(({ from, subject, body }) => {
         if (subject === 'gui-input' && body) {
@@ -369,35 +380,10 @@
       badge.className = 'badge waiting';
     }
 
-    function connectInputSocket() {
-      // Normalize URL: ensure http(s) scheme (not ws/wss) for Socket.IO
-      const url = inputServerUrl.replace(/\/+$/, '').replace(/^ws(s?):/, 'http$1:');
-      console.log('[GUI Module] Connecting Socket.IO to', url);
-      inputSocket = io.connect(url, {
-        reconnectionAttempts: Infinity,
-        timeout: 5000,
-        forceNew: true
-      });
-      inputSocket.on('connect', () => {
-        console.log('[GUI Module] Socket.IO connected');
-        const status = document.getElementById('station-relay-status');
-        if (status) { status.textContent = 'Connected'; status.style.color = '#0f0'; }
-      });
-      inputSocket.on('disconnect', () => {
-        console.log('[GUI Module] Socket.IO disconnected');
-        const status = document.getElementById('station-relay-status');
-        if (status) { status.textContent = 'Disconnected'; status.style.color = '#f00'; }
-      });
-      inputSocket.on('connect_error', (err) => {
-        console.warn('[GUI Module] Socket.IO error:', err.message);
-        const status = document.getElementById('station-relay-status');
-        if (status) { status.textContent = 'Error'; status.style.color = '#f00'; }
-      });
-    }
-
     function relayInput(event) {
-      if (inputSocket && inputSocket.connected) {
-        inputSocket.emit('gui-input', event);
+      const relay = document.getElementById('relay-frame');
+      if (relay && relay.contentWindow && relayConnected) {
+        relay.contentWindow.postMessage({ type: 'gui-input', event: event }, '*');
         relayOk++;
         const status = document.getElementById('station-relay-status');
         if (status && relayOk % 50 === 1) {
@@ -408,7 +394,7 @@
         relayFail++;
         const status = document.getElementById('station-relay-status');
         if (status && relayFail % 10 === 1) {
-          status.textContent = 'NoConn:' + relayFail;
+          status.textContent = 'NoRelay:' + relayFail;
           status.style.color = '#f00';
         }
       }
