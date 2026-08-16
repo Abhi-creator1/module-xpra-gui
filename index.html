@@ -472,17 +472,21 @@
       }
 
       let lastMoveTime = 0;
+      let isDragging = false;
+      let activeButtons = new Set();
+      const DRAG_THROTTLE_MS = 16; // ~60fps during drag for smooth rviz rotation
 
-      // ---- Mouse Move (throttled) ----
-      overlay.addEventListener('mousemove', (e) => {
+      // ---- Pointer Move (reduced throttle during drag) ----
+      overlay.addEventListener('pointermove', (e) => {
         const now = Date.now();
-        if (now - lastMoveTime < MOUSEMOVE_THROTTLE_MS) return;
+        const throttle = isDragging ? DRAG_THROTTLE_MS : MOUSEMOVE_THROTTLE_MS;
+        if (now - lastMoveTime < throttle) return;
         lastMoveTime = now;
 
         const c = normalizeCoords(e, videoEl);
         if (!c.valid) return;
         Edrys.sendMessage('gui-input', { type: 'mousemove', nx: c.nx, ny: c.ny });
-        trackEvent('move');
+        if (isDragging) trackEvent('drag');
       });
 
       // ---- Pointer Down (handles left, middle, right reliably) ----
@@ -490,6 +494,8 @@
         e.preventDefault();
         overlay.focus();
         overlay.setPointerCapture(e.pointerId);
+        activeButtons.add(e.button);
+        isDragging = true;
         const c = normalizeCoords(e, videoEl);
         if (!c.valid) return;
         Edrys.sendMessage('gui-input', {
@@ -502,12 +508,24 @@
       // ---- Pointer Up ----
       overlay.addEventListener('pointerup', (e) => {
         e.preventDefault();
+        activeButtons.delete(e.button);
+        if (activeButtons.size === 0) isDragging = false;
         const c = normalizeCoords(e, videoEl);
         if (!c.valid) return;
         Edrys.sendMessage('gui-input', {
           type: 'mouseup', nx: c.nx, ny: c.ny,
           button: e.button + 1
         });
+      });
+
+      // ---- Pointer Cancel (e.g. browser interrupts drag) ----
+      overlay.addEventListener('pointercancel', (e) => {
+        // Release all buttons to prevent stuck state
+        activeButtons.forEach(btn => {
+          Edrys.sendMessage('gui-input', { type: 'mouseup', nx: 0.5, ny: 0.5, button: btn + 1 });
+        });
+        activeButtons.clear();
+        isDragging = false;
       });
 
       // ---- Double Click ----
@@ -538,11 +556,54 @@
         });
       }, { passive: false });
 
+      // ---- Modifier key state tracking ----
+      let modifierState = { ctrl: false, shift: false, alt: false, meta: false };
+
+      function syncModifiers(e) {
+        // Release modifiers that browser says are up but we think are down
+        if (modifierState.ctrl && !e.ctrlKey) {
+          Edrys.sendMessage('gui-input', { type: 'keyup', key: 'Control' });
+          modifierState.ctrl = false;
+        }
+        if (modifierState.shift && !e.shiftKey) {
+          Edrys.sendMessage('gui-input', { type: 'keyup', key: 'Shift' });
+          modifierState.shift = false;
+        }
+        if (modifierState.alt && !e.altKey) {
+          Edrys.sendMessage('gui-input', { type: 'keyup', key: 'Alt' });
+          modifierState.alt = false;
+        }
+        if (modifierState.meta && !e.metaKey) {
+          Edrys.sendMessage('gui-input', { type: 'keyup', key: 'Meta' });
+          modifierState.meta = false;
+        }
+      }
+
+      // Reset all modifiers when overlay loses focus
+      overlay.addEventListener('blur', () => {
+        ['Control', 'Shift', 'Alt', 'Meta'].forEach(key => {
+          Edrys.sendMessage('gui-input', { type: 'keyup', key: key });
+        });
+        modifierState = { ctrl: false, shift: false, alt: false, meta: false };
+        // Also release any held mouse buttons
+        activeButtons.forEach(btn => {
+          Edrys.sendMessage('gui-input', { type: 'mouseup', nx: 0.5, ny: 0.5, button: btn + 1 });
+        });
+        activeButtons.clear();
+        isDragging = false;
+      });
+
       // ---- Keyboard ----
       overlay.addEventListener('keydown', (e) => {
         // Allow Escape and F11 to pass through to the browser
         if (e.key === 'Escape' || e.key === 'F11') return;
         e.preventDefault();
+        // Track modifier state
+        if (e.key === 'Control') modifierState.ctrl = true;
+        if (e.key === 'Shift') modifierState.shift = true;
+        if (e.key === 'Alt') modifierState.alt = true;
+        if (e.key === 'Meta') modifierState.meta = true;
+        syncModifiers(e);
         Edrys.sendMessage('gui-input', {
           type: 'keydown',
           key: e.key,
@@ -557,6 +618,10 @@
       overlay.addEventListener('keyup', (e) => {
         if (e.key === 'Escape' || e.key === 'F11') return;
         e.preventDefault();
+        if (e.key === 'Control') modifierState.ctrl = false;
+        if (e.key === 'Shift') modifierState.shift = false;
+        if (e.key === 'Alt') modifierState.alt = false;
+        if (e.key === 'Meta') modifierState.meta = false;
         Edrys.sendMessage('gui-input', {
           type: 'keyup',
           key: e.key,
