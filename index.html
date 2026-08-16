@@ -370,7 +370,8 @@
     }
 
     function connectInputSocket() {
-      const url = inputServerUrl.replace(/\/+$/, '');
+      // Normalize URL: ensure http(s) scheme (not ws/wss) for Socket.IO
+      const url = inputServerUrl.replace(/\/+$/, '').replace(/^ws(s?):/, 'http$1:');
       console.log('[GUI Module] Connecting Socket.IO to', url);
       inputSocket = io.connect(url, {
         reconnectionAttempts: Infinity,
