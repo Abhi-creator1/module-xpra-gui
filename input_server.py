@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-input_server.py - HTTP input injection server for edrys-Lite ROS2 GUI module.
+input_server.py - Input injection server for edrys-Lite ROS2 GUI module.
 
 Runs inside the Docker container alongside xpra. Receives normalized
-mouse/keyboard events from the station's browser module and injects them
-into the Xvfb display via xdotool.
+mouse/keyboard events via WebSocket (primary) or HTTP POST (fallback)
+and injects them into the Xvfb display via xdotool.
 
 Usage:
     python3 input_server.py
@@ -16,26 +16,26 @@ Environment variables:
     INPUT_PORT    Port to listen on (default: 5001)
 
 Requirements:
-    - flask, flask-cors (pip)
+    - flask, flask-cors, flask-sock (pip)
     - xdotool (apt-get install xdotool)
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_sock import Sock
 import subprocess
 import os
+import json
 import logging
 
 app = Flask(__name__)
 CORS(app)
+sock = Sock(app)
 
 
 @app.after_request
 def add_private_network_access_headers(response):
-    """Handle Chrome Private Network Access (PNA) preflight requirements.
-    HTTPS pages fetching http://localhost need this header in the response."""
-    if request.method == 'OPTIONS':
-        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    """Handle Chrome Private Network Access (PNA) preflight requirements."""
     response.headers['Access-Control-Allow-Private-Network'] = 'true'
     return response
 
@@ -50,45 +50,16 @@ XDO_ENV = {**os.environ, 'DISPLAY': DISPLAY}
 
 # ---- JavaScript key name -> xdotool key name mapping ----
 JS_TO_XDO_KEY = {
-    # Navigation
-    'Enter': 'Return',
-    'Backspace': 'BackSpace',
-    'Tab': 'Tab',
-    'Escape': 'Escape',
-    'Delete': 'Delete',
-    'Insert': 'Insert',
-    'Home': 'Home',
-    'End': 'End',
-    'PageUp': 'Prior',
-    'PageDown': 'Next',
-
-    # Arrow keys
-    'ArrowUp': 'Up',
-    'ArrowDown': 'Down',
-    'ArrowLeft': 'Left',
-    'ArrowRight': 'Right',
-
-    # Modifiers
-    'Control': 'Control_L',
-    'Shift': 'Shift_L',
-    'Alt': 'Alt_L',
-    'Meta': 'Super_L',
-    'CapsLock': 'Caps_Lock',
-    'NumLock': 'Num_Lock',
-    'ScrollLock': 'Scroll_Lock',
-
-    # Function keys
+    'Enter': 'Return', 'Backspace': 'BackSpace', 'Tab': 'Tab',
+    'Escape': 'Escape', 'Delete': 'Delete', 'Insert': 'Insert',
+    'Home': 'Home', 'End': 'End', 'PageUp': 'Prior', 'PageDown': 'Next',
+    'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowLeft': 'Left', 'ArrowRight': 'Right',
+    'Control': 'Control_L', 'Shift': 'Shift_L', 'Alt': 'Alt_L', 'Meta': 'Super_L',
+    'CapsLock': 'Caps_Lock', 'NumLock': 'Num_Lock', 'ScrollLock': 'Scroll_Lock',
     'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4',
     'F5': 'F5', 'F6': 'F6', 'F7': 'F7', 'F8': 'F8',
     'F9': 'F9', 'F10': 'F10', 'F11': 'F11', 'F12': 'F12',
-
-    # Whitespace
-    ' ': 'space',
-
-    # Misc
-    'ContextMenu': 'Menu',
-    'PrintScreen': 'Print',
-    'Pause': 'Pause',
+    ' ': 'space', 'ContextMenu': 'Menu', 'PrintScreen': 'Print', 'Pause': 'Pause',
 }
 
 
@@ -108,10 +79,8 @@ def map_key(js_key):
     """Map a JavaScript key name to the corresponding xdotool key name."""
     if js_key in JS_TO_XDO_KEY:
         return JS_TO_XDO_KEY[js_key]
-    # Single printable characters are used as-is by xdotool
     if len(js_key) == 1:
         return js_key
-    # Fallback: pass through and hope xdotool recognises it
     return js_key
 
 
@@ -122,15 +91,10 @@ def clamp_coords(nx, ny):
     return str(x), str(y)
 
 
-@app.route('/input', methods=['POST'])
-def handle_input():
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({'error': 'no JSON body'}), 400
-
+def process_input(data):
+    """Process a single input event dict. Returns True on success."""
     event_type = data.get('type', '')
 
-    # ---- Mouse events ----
     if event_type == 'mousemove':
         x, y = clamp_coords(data.get('nx', 0), data.get('ny', 0))
         xdotool('mousemove', x, y)
@@ -155,16 +119,13 @@ def handle_input():
     elif event_type == 'scroll':
         x, y = clamp_coords(data.get('nx', 0), data.get('ny', 0))
         delta_y = data.get('deltaY', 0)
-        # Most browsers send deltaY in multiples of ~100; normalize
         clicks = max(1, abs(int(delta_y / 100))) if delta_y != 0 else 0
         if clicks == 0:
-            return jsonify({'ok': True})
-        # xdotool: button 4 = scroll up, button 5 = scroll down
+            return True
         scroll_btn = '5' if delta_y > 0 else '4'
         xdotool('mousemove', x, y)
         xdotool('click', '--repeat', str(clicks), scroll_btn)
 
-    # ---- Keyboard events ----
     elif event_type == 'keydown':
         key = map_key(data.get('key', ''))
         if key:
@@ -176,20 +137,66 @@ def handle_input():
             xdotool('keyup', key)
 
     else:
-        return jsonify({'error': f'unknown event type: {event_type}'}), 400
+        return False
 
-    return jsonify({'ok': True})
+    return True
+
+
+# ---- WebSocket endpoint (primary — works from HTTPS pages) ----
+@sock.route('/ws')
+def ws_input(ws):
+    """Receive input events over WebSocket."""
+    logging.info('WebSocket client connected')
+    try:
+        while True:
+            msg = ws.receive()
+            if msg is None:
+                break
+            try:
+                data = json.loads(msg)
+                process_input(data)
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        logging.info('WebSocket client disconnected: %s', e)
+
+
+# ---- HTTP POST endpoint (fallback) ----
+@app.route('/input', methods=['POST'])
+def handle_input():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'no JSON body'}), 400
+    if process_input(data):
+        return jsonify({'ok': True})
+    return jsonify({'error': f'unknown event type: {data.get("type")}'}), 400
 
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint -- also reports current config."""
     return jsonify({
         'status': 'ok',
         'display': DISPLAY,
         'resolution': f'{WIDTH}x{HEIGHT}',
         'port': PORT
     })
+
+
+# ---- Serve module files ----
+MODULE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'module')
+
+
+@app.route('/')
+@app.route('/index.html')
+def serve_module():
+    from flask import send_from_directory
+    return send_from_directory(MODULE_DIR, 'index.html')
+
+
+@app.route('/module.json')
+def serve_module_json():
+    from flask import send_from_directory
+    return send_from_directory(MODULE_DIR, 'module.json')
 
 
 if __name__ == '__main__':

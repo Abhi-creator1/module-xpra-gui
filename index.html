@@ -202,7 +202,7 @@
     // ========================================================
     //  Configuration defaults
     // ========================================================
-    const DEFAULT_INPUT_SERVER = 'http://localhost:5001';
+    const DEFAULT_INPUT_SERVER = 'ws://localhost:5001';
     const DEFAULT_RESOLUTION = '1280x800';
     const DEFAULT_STREAM_NAME = 'ros2-gui';
     const MOUSEMOVE_THROTTLE_MS = 33; // ~30fps
@@ -217,6 +217,8 @@
     let isConnected = false;
     let relayOk = 0;
     let relayFail = 0;
+    let inputWs = null;
+    let wsReconnectTimer = null;
 
     // Config (populated on Edrys.onReady)
     let inputServerUrl = DEFAULT_INPUT_SERVER;
@@ -283,6 +285,9 @@
           <video id="preview-video" autoplay muted playsinline></video>
         </div>
       `;
+
+      // Connect WebSocket to input server
+      connectInputWs();
 
       // Listen for student input events and relay to Docker
       let inputCount = 0;
@@ -364,29 +369,44 @@
       badge.className = 'badge waiting';
     }
 
-    function relayInput(event) {
-      fetch(inputServerUrl + '/input', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event)
-      }).then(resp => {
+    function connectInputWs() {
+      if (inputWs && inputWs.readyState <= 1) return; // already open/connecting
+      const wsUrl = inputServerUrl.replace(/^http/, 'ws') + '/ws';
+      console.log('[GUI Module] Connecting WebSocket to', wsUrl);
+      inputWs = new WebSocket(wsUrl);
+      inputWs.onopen = () => {
+        relayOk = 0;
+        relayFail = 0;
         const status = document.getElementById('station-relay-status');
-        if (resp.ok) {
-          relayOk++;
-          if (status) status.textContent = 'OK:' + relayOk;
-          if (status) status.style.color = '#0f0';
-        } else {
-          relayFail++;
-          if (status) status.textContent = 'FAIL:' + relayFail + ' (HTTP ' + resp.status + ')';
-          if (status) status.style.color = '#f00';
+        if (status) { status.textContent = 'WS connected'; status.style.color = '#0f0'; }
+        console.log('[GUI Module] WebSocket connected');
+      };
+      inputWs.onclose = () => {
+        const status = document.getElementById('station-relay-status');
+        if (status) { status.textContent = 'WS disconnected'; status.style.color = '#f00'; }
+        // Reconnect after 2 seconds
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(connectInputWs, 2000);
+      };
+      inputWs.onerror = (err) => {
+        console.warn('[GUI Module] WebSocket error:', err);
+      };
+    }
+
+    function relayInput(event) {
+      if (inputWs && inputWs.readyState === WebSocket.OPEN) {
+        inputWs.send(JSON.stringify(event));
+        relayOk++;
+        const status = document.getElementById('station-relay-status');
+        if (status && relayOk % 30 === 1) {
+          status.textContent = 'WS OK:' + relayOk;
+          status.style.color = '#0f0';
         }
-      }).catch(err => {
+      } else {
         relayFail++;
         const status = document.getElementById('station-relay-status');
-        if (status) status.textContent = 'ERR:' + relayFail + ' ' + err.message;
-        if (status) status.style.color = '#f00';
-        console.warn('[GUI Module] Relay failed:', err.message);
-      });
+        if (status) { status.textContent = 'WS not ready:' + relayFail; status.style.color = '#f00'; }
+      }
     }
 
     // ========================================================
