@@ -3,8 +3,11 @@
 input_server.py - Input injection server for edrys-Lite ROS2 GUI module.
 
 Runs inside the Docker container alongside xpra. Receives normalized
-mouse/keyboard events via WebSocket (primary) or HTTP POST (fallback)
-and injects them into the Xvfb display via xdotool.
+mouse/keyboard events via Socket.IO and injects them into the Xvfb
+display via xdotool.
+
+Uses Flask-SocketIO (same transport as pyxtermjs) which is proven to
+work from HTTPS pages connecting to localhost.
 
 Usage:
     python3 input_server.py
@@ -16,13 +19,13 @@ Environment variables:
     INPUT_PORT    Port to listen on (default: 5001)
 
 Requirements:
-    - flask, flask-cors, flask-sock (pip)
+    - flask, flask-cors, flask-socketio (pip)
     - xdotool (apt-get install xdotool)
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_sock import Sock
+from flask_socketio import SocketIO
 import subprocess
 import os
 import json
@@ -30,14 +33,7 @@ import logging
 
 app = Flask(__name__)
 CORS(app)
-sock = Sock(app)
-
-
-@app.after_request
-def add_private_network_access_headers(response):
-    """Handle Chrome Private Network Access (PNA) preflight requirements."""
-    response.headers['Access-Control-Allow-Private-Network'] = 'true'
-    return response
+socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ---- Configuration from environment ----
 DISPLAY = os.environ.get('DISPLAY', ':100')
@@ -142,30 +138,27 @@ def process_input(data):
     return True
 
 
-# ---- WebSocket endpoint (primary — works from HTTPS pages) ----
-@sock.route('/ws')
-def ws_input(ws):
-    """Receive input events over WebSocket."""
-    logging.info('WebSocket client connected')
-    try:
-        while True:
-            msg = ws.receive()
-            if msg is None:
-                break
-            try:
-                data = json.loads(msg)
-                process_input(data)
-            except json.JSONDecodeError:
-                pass
-    except Exception as e:
-        logging.info('WebSocket client disconnected: %s', e)
+# ---- Socket.IO endpoint (primary — proven to work from HTTPS pages) ----
+@socketio.on('gui-input')
+def handle_gui_input(data):
+    """Receive input events over Socket.IO."""
+    if isinstance(data, dict):
+        process_input(data)
 
 
-# ---- HTTP POST endpoint (primary) ----
+@socketio.on('connect')
+def handle_connect():
+    logging.info('Socket.IO client connected: %s', request.sid)
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    logging.info('Socket.IO client disconnected: %s', request.sid)
+
+
+# ---- HTTP POST endpoint (fallback for local testing) ----
 @app.route('/input', methods=['POST'])
 def handle_input():
-    # force=True parses JSON regardless of Content-Type header.
-    # The client sends text/plain (no header) to avoid CORS preflight.
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({'error': 'no JSON body'}), 400
@@ -208,4 +201,4 @@ if __name__ == '__main__':
     )
     logging.info('Starting input server on port %d (DISPLAY=%s, %dx%d)',
                  PORT, DISPLAY, WIDTH, HEIGHT)
-    app.run(host='0.0.0.0', port=PORT)
+    socketio.run(app, host='0.0.0.0', port=PORT)

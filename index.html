@@ -35,6 +35,7 @@
   <title>ROS2 GUI Viewer</title>
 
   <script src="https://edrys-labs.github.io/module/edrys.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -217,6 +218,7 @@
     let isConnected = false;
     let relayOk = 0;
     let relayFail = 0;
+    let inputSocket = null;
 
     // Config (populated on Edrys.onReady)
     let inputServerUrl = DEFAULT_INPUT_SERVER;
@@ -283,6 +285,9 @@
           <video id="preview-video" autoplay muted playsinline></video>
         </div>
       `;
+
+      // Connect to input server via Socket.IO (same transport as pyxtermjs)
+      connectInputSocket();
 
       // Listen for student input events and relay to Docker
       let inputCount = 0;
@@ -364,27 +369,48 @@
       badge.className = 'badge waiting';
     }
 
+    function connectInputSocket() {
+      const url = inputServerUrl.replace(/\/+$/, '');
+      console.log('[GUI Module] Connecting Socket.IO to', url);
+      inputSocket = io.connect(url, {
+        reconnectionAttempts: Infinity,
+        timeout: 5000,
+        forceNew: true
+      });
+      inputSocket.on('connect', () => {
+        console.log('[GUI Module] Socket.IO connected');
+        const status = document.getElementById('station-relay-status');
+        if (status) { status.textContent = 'Connected'; status.style.color = '#0f0'; }
+      });
+      inputSocket.on('disconnect', () => {
+        console.log('[GUI Module] Socket.IO disconnected');
+        const status = document.getElementById('station-relay-status');
+        if (status) { status.textContent = 'Disconnected'; status.style.color = '#f00'; }
+      });
+      inputSocket.on('connect_error', (err) => {
+        console.warn('[GUI Module] Socket.IO error:', err.message);
+        const status = document.getElementById('station-relay-status');
+        if (status) { status.textContent = 'Error'; status.style.color = '#f00'; }
+      });
+    }
+
     function relayInput(event) {
-      const url = inputServerUrl.replace(/\/+$/, '') + '/input';
-      // mode:'no-cors' — tells Chrome to send the request without CORS checks.
-      // Response is opaque (can't read it) but the server receives the data.
-      fetch(url, {
-        method: 'POST',
-        body: JSON.stringify(event),
-        mode: 'no-cors'
-      }).then((resp) => {
+      if (inputSocket && inputSocket.connected) {
+        inputSocket.emit('gui-input', event);
         relayOk++;
         const status = document.getElementById('station-relay-status');
         if (status && relayOk % 50 === 1) {
-          status.textContent = 'Relay:' + relayOk;
+          status.textContent = 'OK:' + relayOk;
           status.style.color = '#0f0';
         }
-      }).catch((err) => {
+      } else {
         relayFail++;
-        if (relayFail <= 3) console.error('[GUI Module] Relay fetch error:', err.message || err);
         const status = document.getElementById('station-relay-status');
-        if (status) { status.textContent = 'Fail:' + relayFail; status.style.color = '#f00'; }
-      });
+        if (status && relayFail % 10 === 1) {
+          status.textContent = 'NoConn:' + relayFail;
+          status.style.color = '#f00';
+        }
+      }
     }
 
     // ========================================================
