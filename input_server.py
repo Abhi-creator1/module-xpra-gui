@@ -161,10 +161,12 @@ def ws_input(ws):
         logging.info('WebSocket client disconnected: %s', e)
 
 
-# ---- HTTP POST endpoint (fallback) ----
+# ---- HTTP POST endpoint (primary) ----
 @app.route('/input', methods=['POST'])
 def handle_input():
-    data = request.get_json(silent=True)
+    # force=True parses JSON regardless of Content-Type header.
+    # The client sends text/plain (no header) to avoid CORS preflight.
+    data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({'error': 'no JSON body'}), 400
     if process_input(data):
